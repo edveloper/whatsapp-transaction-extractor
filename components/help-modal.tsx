@@ -27,9 +27,10 @@ export default function HelpModal() {
           </DialogHeader>
 
           <Tabs defaultValue="export" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="export">Export Chat</TabsTrigger>
               <TabsTrigger value="usage">How to Use</TabsTrigger>
+              <TabsTrigger value="templates">Templates</TabsTrigger>
               <TabsTrigger value="mobile">Mobile Tips</TabsTrigger>
             </TabsList>
 
@@ -112,6 +113,46 @@ export default function HelpModal() {
                     <li>Remittance services (WorldRemit, Remitly, Wise, etc.)</li>
                     <li>Cash payments & manual entries</li>
                   </ul>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="templates" className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Custom Extraction Templates</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Create custom extraction patterns using regex to parse your specific transaction formats.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-sm mb-2">Creating a Template</h3>
+                  <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
+                    <li>Click "Extraction Templates" in the header</li>
+                    <li>Click "New Template" to create a custom pattern</li>
+                    <li>Define regex patterns for Amount (required), Date, Reference, Paid By, and Paid To</li>
+                    <li>Use capturing groups () to extract values</li>
+                    <li>Save and select your template before uploading</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-sm mb-2">Pattern Examples</h3>
+                  <div className="bg-slate-50 p-3 rounded text-xs font-mono space-y-2 text-muted-foreground">
+                    <p>
+                      Amount: <span className="text-primary">(?:Ksh|USD)\s*([0-9,]+)</span>
+                    </p>
+                    <p>
+                      Date:{" "}
+                      <span className="text-primary">
+                        \d{(1, 2)}/\d{(1, 2)}/\d{4}
+                      </span>
+                    </p>
+                    <p>
+                      Reference: <span className="text-primary">\b([A-Z0-9]{(8, 12)})\b</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </TabsContent>

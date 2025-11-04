@@ -5,6 +5,9 @@ import { Download, RotateCcw, Settings2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import TransactionTable from "./transaction-table"
 import ColumnCustomizer from "./column-customizer"
+import AdvancedFilters from "./advanced-filters"
+import TransactionAnalytics from "./transaction-analytics"
+import SmartExportOptions from "./smart-export-options"
 
 interface Transaction {
   [key: string]: string | number
@@ -32,30 +35,29 @@ export default function PreviewDashboard({ transactions, fileName, onReset }: Pr
         )
       : {},
   )
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>(transactions)
 
-  const filteredTransactions = useMemo(
+  const displayedTransactions = useMemo(
     () =>
-      transactions.map((tx) =>
+      filteredTransactions.map((tx) =>
         visibleColumns.reduce((acc, col) => {
           acc[col] = tx[col]
           return acc
         }, {} as Transaction),
       ),
-    [transactions, visibleColumns],
+    [filteredTransactions, visibleColumns],
   )
 
   const handleDownloadCSV = () => {
-    if (filteredTransactions.length === 0) return
+    if (displayedTransactions.length === 0) return
 
-    // Create CSV header
     const headers = visibleColumns.map((col) => columnHeaders[col] || col)
     const csvContent = [
       headers.join(","),
-      ...filteredTransactions.map((tx) =>
+      ...displayedTransactions.map((tx) =>
         visibleColumns
           .map((col) => {
             const value = tx[col]
-            // Handle commas and quotes in CSV
             const stringValue = String(value || "")
             return stringValue.includes(",") || stringValue.includes('"')
               ? `"${stringValue.replace(/"/g, '""')}"`
@@ -65,7 +67,6 @@ export default function PreviewDashboard({ transactions, fileName, onReset }: Pr
       ),
     ].join("\n")
 
-    // Create and trigger download
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
@@ -84,11 +85,11 @@ export default function PreviewDashboard({ transactions, fileName, onReset }: Pr
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-foreground">Extracted Transactions</h2>
           <p className="text-xs md:text-sm text-muted-foreground mt-1">
-            {filteredTransactions.length} transactions from {fileName}
+            {displayedTransactions.length} of {transactions.length} transactions from {fileName}
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full">
           <Button
             onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}
             variant="outline"
@@ -111,6 +112,16 @@ export default function PreviewDashboard({ transactions, fileName, onReset }: Pr
         </div>
       </div>
 
+      {/* Analytics Dashboard */}
+      <TransactionAnalytics transactions={filteredTransactions} allColumns={Object.keys(transactions[0] || {})} />
+
+      {/* Advanced Filters */}
+      <AdvancedFilters
+        transactions={transactions}
+        onFiltersChange={setFilteredTransactions}
+        allColumns={visibleColumns}
+      />
+
       {/* Column Customizer */}
       {showColumnCustomizer && (
         <ColumnCustomizer
@@ -121,8 +132,16 @@ export default function PreviewDashboard({ transactions, fileName, onReset }: Pr
         />
       )}
 
+      {/* Smart Export Options */}
+      <SmartExportOptions
+        transactions={displayedTransactions}
+        visibleColumns={visibleColumns}
+        columnHeaders={columnHeaders}
+        fileName={fileName}
+      />
+
       {/* Transaction Table */}
-      <TransactionTable transactions={filteredTransactions} columns={visibleColumns} columnHeaders={columnHeaders} />
+      <TransactionTable transactions={displayedTransactions} columns={visibleColumns} columnHeaders={columnHeaders} />
     </div>
   )
 }
