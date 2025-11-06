@@ -14,12 +14,6 @@ interface CustomTemplate {
   paidToPattern: string
 }
 
-function detectTelegramTransactionType(line: string): string {
-  if (/sent|paid/i.test(line)) return "Sent"
-  if (/received/i.test(line)) return "Received"
-  return "Other"
-}
-
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -154,13 +148,11 @@ function extractWithCustomTemplate(text: string, template: CustomTemplate): Tran
 function extractTelegramTransactions(text: string): Transaction[] {
   const records: Transaction[] = []
 
-  const datePattern = /(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2})[,\s]*(\d{1,2}:\d{2}(?::\d{2})?)?/g
-
   const lines = text.split("\n")
-  let currentMessage = ""
   let currentDate = ""
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     if (!line.trim() || line.startsWith("Telegram export") || line.startsWith("=")) continue
 
     const dateMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}).+?(\d{1,2}:\d{2})/)
@@ -169,29 +161,37 @@ function extractTelegramTransactions(text: string): Transaction[] {
     }
 
     if (/amount|ksh|usd|transfer|sent|received|paid|cash/i.test(line)) {
-      currentMessage += line + " "
-
       const amount = extractAmount(line)
       const reference = extractCode(line)
 
       if (amount && currentDate) {
+        const transactionType = detectContentTransactionType(line)
+
         const transaction: Transaction = {
           Date: currentDate,
           Amount: amount,
-          Type: detectTelegramTransactionType(line),
+          Type: transactionType,
           Reference: reference || "TG",
           "Paid By": extractTelegramUser(text, currentDate) || "Telegram User",
           "Paid To": "",
-          Purpose: currentMessage.trim(),
+          Purpose: line.trim(),
         }
 
         records.push(transaction)
-        currentMessage = ""
       }
     }
   }
 
   return records
+}
+
+function detectContentTransactionType(text: string): string {
+  if (/M-PESA|MPESA|mpesa/i.test(text)) return "M-PESA"
+  if (/bank|transfer|deposit|swift|wire/i.test(text)) return "Bank Transfer"
+  if (/worldremit|remitly|wise|xoom|money gram/i.test(text)) return "Remittance"
+  if (/\bcash\b/i.test(text)) return "Cash"
+  if (/card|credit/i.test(text)) return "Card"
+  return "Other"
 }
 
 function extractPdfTransactions(buffer: ArrayBuffer, fileName: string): Transaction[] {
@@ -208,27 +208,38 @@ function extractPdfTransactions(buffer: ArrayBuffer, fileName: string): Transact
   }
 
   const lines = text.split(/\n|\r/)
-  const dateRegex = /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/
-  const amountRegex = /(?:Amount|Debit|Credit|\.?)[\s:]*(?:KES|KSH|USD|EUR)?[\s]*([0-9,]+(?:\.[0-9]{2})?)/i
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i].trim()
+    if (!line) continue
 
+    const dateRegex = /\b(\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}-\d{1,2}-\d{4})\b/
     const dateMatch = line.match(dateRegex)
-    const amountMatch = line.match(amountRegex)
 
-    if (dateMatch && amountMatch) {
-      const transaction: Transaction = {
-        Date: dateMatch[1],
-        Amount: Number.parseFloat(amountMatch[1].replace(/,/g, "")),
-        Type: "Bank Statement",
-        Reference: extractCode(line) || "PDF",
-        "Paid By": "Bank",
-        "Paid To": "",
-        Purpose: line.trim(),
+    const amountRegex = /\b([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]{2})?)\b/
+    const amountMatches = line.match(new RegExp(amountRegex, "g"))
+
+    if (dateMatch && amountMatches && amountMatches.length > 0) {
+      // Take the last amount match as it's likely the transaction amount
+      const amountStr = amountMatches[amountMatches.length - 1]
+      const amount = Number.parseFloat(amountStr.replace(/,/g, ""))
+
+      if (amount > 0) {
+        const reference = extractCode(line) || extractCodeFromText(line) || "PDF"
+        const description = line.replace(dateMatch[0], "").replace(amountStr, "").trim()
+
+        const transaction: Transaction = {
+          Date: dateMatch[1],
+          Amount: amount,
+          Type: "Bank Statement",
+          Reference: reference,
+          "Paid By": "Bank",
+          "Paid To": "",
+          Purpose: description || "Bank Transaction",
+        }
+
+        records.push(transaction)
       }
-
-      records.push(transaction)
     }
   }
 
@@ -337,27 +348,41 @@ function extractEmailTransactions(text: string): Transaction[] {
 
 function extractWhatsAppTransactions(text: string): Transaction[] {
   const records: Transaction[] = []
+  const allLines = text.split("\n")
 
   const pattern =
     /(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2})\s*(?:in the (?:morning|afternoon)|at night)?\s*-\s*([^:]+):\s*(.*)/g
 
   let match
+  const processedIndices = new Set<number>()
+
   while ((match = pattern.exec(text)) !== null) {
     const [, date, time, sender, message] = match
     const cleanedMessage = cleanMessage(message)
 
     if (/Ksh|KES|cash|WorldRemit|I&M|Equity|paid to|sent to|Confirm|Confirmed/i.test(cleanedMessage)) {
+      // Find the line index to look for context
+      let lineIndex = 0
+      for (let i = 0; i < allLines.length; i++) {
+        if (allLines[i].includes(cleanedMessage)) {
+          lineIndex = i
+          break
+        }
+      }
+
       let transaction: Partial<Transaction> = {}
 
       if (/\bcash\b|\bgiven\b/i.test(cleanedMessage)) {
-        const cashMatch = cleanedMessage.match(
-          /([0-9,]+|[0-9]+K)\s*(?:ksh|cash)?\s*(?:given|to|paid)?\s*(?:to\s+)?([A-Za-z\s]+)?/i,
-        )
+        const cashMatch = cleanedMessage.match(/([0-9,]+(?:\.[0-9]+)?)\s*([kK])(?!\w)/)
         if (cashMatch) {
           const rawAmount = cashMatch[1]
-          const amount = rawAmount.toLowerCase().endsWith("k")
-            ? Number.parseFloat(rawAmount.slice(0, -1).replace(",", "")) * 1000
-            : Number.parseFloat(rawAmount.replace(",", ""))
+          const multiplier = 1000
+          const amount = Number.parseFloat(rawAmount.replace(/,/g, "")) * multiplier
+
+          const paidToMatch = cleanedMessage.match(
+            /(?:given|to|paid)\s+(?:to\s+)?([A-Z][A-Za-z\s]+?)(?:\s*\.|,|$|\band\b)/i,
+          )
+          const paidTo = paidToMatch ? paidToMatch[1].trim() : ""
 
           transaction = {
             Date: formatDateTime(date, time),
@@ -365,12 +390,12 @@ function extractWhatsAppTransactions(text: string): Transaction[] {
             Type: "Cash",
             Reference: "CASH",
             "Paid By": sender,
-            "Paid To": (cashMatch[2] || "").trim(),
-            Purpose: cleanedMessage,
+            "Paid To": paidTo,
+            Purpose: extractPurpose(allLines, lineIndex, cleanedMessage),
           }
         }
       } else {
-        const amount = extractAmount(cleanedMessage)
+        const amount = extractAmountWithKSuffix(cleanedMessage)
         const reference = extractCode(cleanedMessage)
         const [paidBy, paidTo] = extractEntities(cleanedMessage)
 
@@ -397,7 +422,7 @@ function extractWhatsAppTransactions(text: string): Transaction[] {
             Reference: ref,
             "Paid By": paidBy || sender,
             "Paid To": paidTo,
-            Purpose: cleanedMessage,
+            Purpose: extractPurpose(allLines, lineIndex, cleanedMessage),
           }
         }
       }
@@ -409,6 +434,36 @@ function extractWhatsAppTransactions(text: string): Transaction[] {
   }
 
   return records
+}
+
+function extractAmountWithKSuffix(msg: string): number | null {
+  // First try standard currency formats
+  const currencyMatch = msg.match(/(?:Ksh|KES|USD|EUR|GBP|ksh)[\s]*([0-9,]+(?:\.[0-9]+)?)/)
+  if (currencyMatch) {
+    return Number.parseFloat(currencyMatch[1].replace(/,/g, ""))
+  }
+
+  // Then try K suffix (2k, 5.5k, etc) with word boundary to avoid matching names like "Kevin"
+  const kSuffixMatch = msg.match(/\b([0-9,]+(?:\.[0-9]+)?)\s*[kK](?!\w)/)
+  if (kSuffixMatch) {
+    return Number.parseFloat(kSuffixMatch[1].replace(/,/g, "")) * 1000
+  }
+
+  return null
+}
+
+function extractPurpose(allLines: string[], currentLineIndex: number, currentMessage: string): string {
+  // Look at the next line for purpose information
+  if (currentLineIndex + 1 < allLines.length) {
+    const nextLine = allLines[currentLineIndex + 1].trim()
+    // If next line contains purpose-related keywords, use it
+    if (nextLine && /hive|material|labour|labor|fee|deposit|payment|cost|expense/i.test(nextLine)) {
+      return nextLine
+    }
+  }
+
+  // If not found in next line, return the message itself as purpose
+  return currentMessage
 }
 
 function detectTransactionType(text: string): string {
@@ -451,20 +506,25 @@ function extractEntities(msg: string): [string, string] {
   let paidBy = ""
   let paidTo = ""
 
-  const sentToMatch = msg.match(/sent\s+to\s+([^on]+)/i)
+  // Look for "sent to [NAME]" stopping before: commas, digits (0...), "on", or line end
+  const sentToMatch = msg.match(/sent\s+to\s+([A-Za-z\s]+?)(?:\s*,|\s+\d|\s+on\b|\s*$)/i)
   if (sentToMatch) {
     paidTo = sentToMatch[1].trim()
   }
 
-  const receivedFromMatch = msg.match(/received\s+from\s+([^on]+)/i)
+  const receivedFromMatch = msg.match(/received\s+from\s+([A-Za-z\s]+?)(?:\s*,|\s+\d|\s+on\b|\s*$)/i)
   if (receivedFromMatch) {
     paidBy = receivedFromMatch[1].trim()
   }
 
-  const paidToMatch = msg.match(/paid\s+to\s+([^via]+)/i)
+  const paidToMatch = msg.match(/paid\s+to\s+([A-Za-z\s]+?)(?:\s*,|\s+\d|\s+on\b|\s*$)/i)
   if (paidToMatch) {
     paidTo = paidToMatch[1].trim()
   }
+
+  // Clean up extra whitespace and handle edge cases
+  paidTo = paidTo.replace(/\s+/g, " ").trim()
+  paidBy = paidBy.replace(/\s+/g, " ").trim()
 
   return [paidBy, paidTo]
 }
