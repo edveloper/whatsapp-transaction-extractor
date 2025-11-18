@@ -511,6 +511,45 @@ function extractTelegramUser(text: string, date: string): string {
   return ""
 }
 
+function extractPaybillDestination(msg: string): { destination: string; account: string; } | null {
+  // Pattern 1: Confirmed, Bill payment to [NAME] ... for account [NUMBER]
+  const billPaymentMatch = msg.match(
+    /(?:Bill payment to|sent to|paid to)\s*([A-Z0-9\s&]+?(?:LIMITED|STORE|BANK|ACCOUNT)?)\s*(?:for account|account number|for acc)\s*([A-Z0-9]+)/i
+  )
+  
+  if (billPaymentMatch) {
+    const destination = billPaymentMatch[1].trim().replace(/\s+/g, ' ')
+    const account = billPaymentMatch[2].trim()
+    
+    // Clean up destination name (remove redundant Paybill Account)
+    const cleanedDestination = destination
+        .replace(/Paybill Account/i, "")
+        .replace(/Paybill/i, "")
+        .trim()
+        
+    return { 
+      destination: cleanedDestination, 
+      account: account 
+    }
+  }
+
+  // Pattern 2: paid to [NAME], [Paybill No] for account number [NUMBER]
+  const paybillMatch = msg.match(
+    /paid to\s*([A-Z0-9\s&]+?)\s*,\s*(\d+)\s*for account number\s*([A-Z0-9]+)/i
+  )
+  
+  if (paybillMatch) {
+    const destination = paybillMatch[1].trim().replace(/\s+/g, ' ')
+    const account = paybillMatch[3].trim()
+    return {
+      destination: destination,
+      account: account,
+    }
+  }
+
+  return null
+}
+
 function detectTransactionType(text: string): string {
   if (/bank|transfer|deposit|swift|wire/i.test(text)) return "Bank Transfer"
   if (/M-PESA|MPESA|mpesa/i.test(text)) return "M-PESA"
@@ -539,10 +578,19 @@ function extractCode(msg: string): string | null {
 }
 
 function extractEntities(msg: string, sender: string): [string, string] {
+  // *** PRIORITY 1: Structured Paybill/Bank Transfer ***
+  const structuredData = extractPaybillDestination(msg)
+  if (structuredData) {
+    // Format: "Equity - Account No: 0116382281"
+    const paidTo = `${structuredData.destination} - Account No: ${structuredData.account}`
+    return [sender, paidTo]
+  }
+  
+  // *** PRIORITY 2: Peer-to-Peer/Simple Name Extraction (Original Logic) ***
   let paidBy = sender
   let paidTo = ""
 
-  // Heuristic: "sent to [NAME]" 
+  // Look for "sent to [NAME]" stopping before: commas, digits (0...), "on", or line end
   const sentToMatch = msg.match(/sent\s+to\s+([A-Za-z\s]+?)(?:\s*,|\s+\d|\s+on\b|\s*$)/i)
   if (sentToMatch) {
     paidTo = sentToMatch[1].trim()
@@ -559,19 +607,14 @@ function extractEntities(msg: string, sender: string): [string, string] {
   if (paidToMatch) {
     paidTo = paidToMatch[1].trim()
   }
-  
+
   // Heuristic: "given to [NAME]"
   const givenToMatch = msg.match(/given\s+to\s+([A-Za-z\s]+?)(?:\s*,|\s+\d|\s+on\b|\s*$)/i)
   if (givenToMatch) {
       paidTo = givenToMatch[1].trim()
   }
-
-  // Fallback for self-reporting "I received 90k"
-  if (/I received/i.test(msg) || /^received/i.test(msg)) {
-      paidTo = "Me"
-  }
-
-  // Clean up extra whitespace
+  
+  // Clean up extra whitespace and handle fallback sender
   paidTo = paidTo.replace(/\s+/g, " ").trim()
   paidBy = paidBy.replace(/\s+/g, " ").trim()
 
