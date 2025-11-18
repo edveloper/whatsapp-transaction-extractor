@@ -20,7 +20,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`font-sans antialiased`}>
+      {/* FIX: Added overflow-x-hidden to prevent body scroll when fixed elements are positioned near the edge */}
+      <body className={`font-sans antialiased overflow-x-hidden`}>
         {children}
         <Analytics />
       </body>
