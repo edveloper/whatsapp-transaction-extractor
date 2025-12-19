@@ -1,5 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+// --- Configuration for large file handling ---
+export const maxDuration = 300 // 5 minutes timeout
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+    responseLimit: '50mb',
+  },
+}
+
 // --- Interfaces ---
 
 interface Transaction {
@@ -38,6 +50,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
+    // Check file size
+    if (file.size > 50000000) { // 50MB
+      return NextResponse.json({ 
+        error: "File too large. Maximum 50MB." 
+      }, { status: 413 })
+    }
+
     let transactions: Transaction[] = []
 
     if (customTemplate) {
@@ -55,23 +74,35 @@ export async function POST(request: NextRequest) {
     } else {
       // Default to WhatsApp (Updated Logic)
       const text = await file.text()
+      
+      // DEBUG: Log detected format
+      console.log("[WhatsApp Parser] Detected format:", detectWhatsAppFormat(text))
+      
       transactions = extractWhatsAppTransactions(text)
+      
+      // DEBUG: Log extraction results
+      console.log(`[WhatsApp Parser] Extracted ${transactions.length} transactions`)
     }
 
-    return NextResponse.json({ transactions })
+    return NextResponse.json({ transactions, count: transactions.length })
   } catch (error) {
     console.error("[v0] Extraction error:", error)
-    return NextResponse.json({ error: "Failed to process file" }, { status: 500 })
+    return NextResponse.json({ 
+      error: "Failed to process file",
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 })
   }
 }
 
-// --- 1. WhatsApp Extraction Logic (REWRITTEN) ---
+// --- 1. WhatsApp Extraction Logic (UPDATED) ---
 
 function extractWhatsAppTransactions(text: string): Transaction[] {
   const records: Transaction[] = []
   
   // Step 1: Normalize text into Message Objects
   const messages = parseChatToObjects(text)
+  
+  console.log(`[WhatsApp Parser] Parsed ${messages.length} messages from chat`)
 
   // Step 2: Iterate through objects
   for (let i = 0; i < messages.length; i++) {
@@ -83,25 +114,24 @@ function extractWhatsAppTransactions(text: string): Transaction[] {
       .replace(/\s+/g, " ")
       .trim()
 
-    // GATEKEEPER: Strict check for transaction keywords
+    // GATEKEEPER: Updated check for transaction keywords
     const isTransaction = 
-      /Ksh|KES|USD|\d+[kK]\b|sent to|paid to|received from|deposited to|Confirmed\.|given to/i.test(cleanContent)
+      /Ksh|KES|USD|\d+[kK]\b|sent to|paid to|received from|deposited to|Confirmed\.|given to|successfully transferred|has been (?:received|credited|debited)|credited to|debited with/i.test(cleanContent)
 
     if (!isTransaction) continue
 
-    // Step 3: Extract Amount (Now using the STRICT validator)
+    // Step 3: Extract Amount (FIXED VERSION)
     const amount = extractFlexibleAmount(cleanContent)
     if (!amount) continue // Skip if no valid amount found
 
     // Step 4: Extract Metadata
-    // We explicitly strip the amount we found from the text to avoid confusing the Reference extractor
     const reference = extractCode(cleanContent) || "MANUAL"
     const [paidBy, paidTo] = extractEntities(cleanContent, msg.sender)
     
     // Step 5: Determine Type
     let type = "Other"
     if (/M-PESA|MPESA/i.test(cleanContent)) type = "M-PESA"
-    else if (/Equity|KCB|Co-op|Bank|I&M/i.test(cleanContent)) type = "Bank Transfer"
+    else if (/Equity|KCB|Co-op|Bank|I&M|DTB|NCBA|Amica|Cooperative|Pesalink/i.test(cleanContent)) type = "Bank Transfer"
     else if (/WorldRemit|Remitly|Wise/i.test(cleanContent)) type = "Remittance"
     else if (/\bcash\b|hand|given/i.test(cleanContent)) type = "Cash"
 
@@ -123,18 +153,27 @@ function extractWhatsAppTransactions(text: string): Transaction[] {
   return records
 }
 
-
+// UPDATED: Now handles multiple WhatsApp export formats
 function parseChatToObjects(text: string): ChatMessage[] {
   const messages: ChatMessage[] = []
-  // Regex captures: Date, Time+AM/PM/Morning, Sender
-  const dateStartRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(\d{1,2}:\d{2}.*?)\s*-\s*(.*?):\s*/
+  
+  // MULTIPLE REGEX PATTERNS for different WhatsApp export formats
+  // Format 1: DD/MM/YYYY, HH:MM AM/PM - Sender: Message
+  const format1 = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(\d{1,2}:\d{2}.*?)\s*-\s*(.*?):\s*/
+  
+  // Format 2: [DD/MM/YYYY, HH:MM:SS] Sender: Message
+  const format2 = /^\[(\d{1,2}\/\d{1,2}\/\d{4}),\s*(\d{1,2}:\d{2}:\d{2})\]\s*(.*?):\s*/
+  
+  // Format 3: DD/MM/YY, HH:MM - Sender: Message (no seconds, 2-digit year)
+  const format3 = /^(\d{1,2}\/\d{1,2}\/\d{2}),\s*(\d{1,2}:\d{2})\s*-\s*(.*?):\s*/
 
   const lines = text.split("\n")
   let currentMsg: Partial<ChatMessage> | null = null
   let bufferContent: string[] = []
 
   for (const line of lines) {
-    const match = line.match(dateStartRegex)
+    // Try each format
+    let match = line.match(format1) || line.match(format2) || line.match(format3)
     
     if (match) {
       // Push previous message to array
@@ -152,7 +191,7 @@ function parseChatToObjects(text: string): ChatMessage[] {
       bufferContent = [contentStart]
       currentMsg = {
         date: formatDateTime(dateStr, timeStr),
-        sender: sender,
+        sender: sender.trim(), // Clean sender name
         originalString: line
       }
     } else {
@@ -172,29 +211,89 @@ function parseChatToObjects(text: string): ChatMessage[] {
   return messages
 }
 
+// FIXED: Now handles edge cases like "Ksh. 31500.0" and "KES249999.0"
 function extractFlexibleAmount(text: string): number | null {
-  // 1. First, try informal "k" notation (e.g., 90k, 10.5K)
-  // We use \b to ensure we don't match part of a code like "AB20K9"
+  // 1. Try informal "k" notation (e.g., 90k, 10.5K)
   const kMatch = text.match(/(?:\b|\s|^)(\d+(?:\.\d+)?)[kK](?:\b|\s|$)/)
   if (kMatch) {
     return parseFloat(kMatch[1]) * 1000
   }
 
-  // 2. Try Strict Currency (Must have prefix OR suffix)
-  // Pattern A: Prefix (Ksh 1000, USD 50)
-  const prefixMatch = text.match(/(?:Ksh|KES|USD|GBP|EUR|UGX|TZS)\.?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/i)
-  if (prefixMatch) {
-    return parseFloat(prefixMatch[1].replace(/,/g, ""))
+  // 2. CONTEXT-AWARE EXTRACTION (PRIORITY!)
+  // This catches "sent Ksh. 31500.0" where there's a period after Ksh
+  const contextPatterns = [
+    // NEW: SMS notification format - "Ksh 11000.00 sent" or "KES 14000 on your"
+    /(?:Ksh|KES|USD|GBP|EUR)\.?\s+([0-9,]+(?:\.[0-9]+)?)\s+(?:sent|received|has been|drawn|credited|debited|made for)/i,
+  
+    // NEW: SMS format without space - "KES14000 on" or "KES63000 VIA"
+    /(?:Ksh|KES|USD|GBP|EUR)([0-9,]+(?:\.[0-9]+)?)\s+(?:on|has|VIA|for)/i,
+  
+    // EXISTING: Chat format - "sent Ksh. 31500.0"
+    /(?:sent|received|transferred|paid|deposited|credited|debited|withdrawn)\s+(?:Ksh|KES|USD|GBP|EUR)\.?\s*([0-9,]+(?:\.[0-9]+)?)/i,
+  ]
+
+  for (const pattern of contextPatterns) {
+    const match = text.match(pattern)
+    if (match) {
+      const amount = parseFloat(match[1].replace(/,/g, ""))
+      // Additional validation: Must be reasonable transaction amount
+      if (amount >= 1 && amount <= 100000000) {
+        return amount
+      }
+    }
   }
 
-  // Pattern B: Suffix (1000/=, 1000 Ksh, 1000 KES)
-  const suffixMatch = text.match(/([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*(?:Ksh|KES|\/-|KSH)/i)
+  // 3. Try STRICT currency patterns with MORE FLEXIBILITY
+  // Pattern A: Prefix with optional space/period (Ksh 1000, Ksh.1000, KES249999.0)
+  const prefixMatch = text.match(/(?:Ksh|KES|USD|GBP|EUR|UGX|TZS)\.?\s*([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)/i)
+  if (prefixMatch) {
+    const amount = parseFloat(prefixMatch[1].replace(/,/g, ""))
+    // Sanity check: Amount should be reasonable (not a year like 2025)
+    if (amount >= 1 && amount <= 100000000) {
+      return amount
+    }
+  }
+
+  // Pattern B: Suffix (1000/=, 1000 Ksh, 31500.0 to)
+  const suffixMatch = text.match(/([0-9]{1,3}(?:,?[0-9]{3})*(?:\.[0-9]+)?)\s*(?:Ksh|KES|\/-|KSH|to|from)/i)
   if (suffixMatch) {
-    return parseFloat(suffixMatch[1].replace(/,/g, ""))
+    const amount = parseFloat(suffixMatch[1].replace(/,/g, ""))
+    if (amount >= 1 && amount <= 100000000) {
+      return amount
+    }
+  }
+
+  // 4. More context patterns for "Ksh. AMOUNT to" format
+  const toPatterns = [
+    // "Ksh. 31500.0 to" or "KES 31500.0 sent"
+    /(?:Ksh|KES|USD|GBP|EUR)\.?\s+([0-9]+(?:\.[0-9]+)?)\s+(?:to|sent|from|paid|for)/i,
+  ]
+
+  for (const pattern of toPatterns) {
+    const match = text.match(pattern)
+    if (match) {
+      const amount = parseFloat(match[1].replace(/,/g, ""))
+      if (amount >= 1 && amount <= 100000000) {
+        return amount
+      }
+    }
+  }
+
+  // 5. FALLBACK: Look for standalone currency amounts with decimal points
+  // But ONLY if they're clearly not phone numbers or reference codes
+  const decimalAmountMatch = text.match(/(?:Ksh|KES|USD|GBP|EUR)\.?\s+([0-9]+\.[0-9]+)/i)
+  if (decimalAmountMatch) {
+    const amount = parseFloat(decimalAmountMatch[1])
+    // Phone numbers don't have meaningful decimal parts (like .0 or .00)
+    // Transaction amounts often do (31500.0, 249999.0)
+    if (amount >= 1 && amount <= 100000000) {
+      return amount
+    }
   }
 
   return null
 }
+
 function extractPurposeFromContext(currentContent: string, nextContent: string | undefined): string {
   // Priority 1: Look for "for [purpose]" in the current message
   const forMatch = currentContent.match(/\bfor\s+(.+?)(?:\.|$)/i)
@@ -222,7 +321,7 @@ function extractPurposeFromContext(currentContent: string, nextContent: string |
   return "General / See Reference"
 }
 
-// --- 2. Existing Logic (Preserved) ---
+// --- 2. Custom Template Extraction ---
 
 function extractWithCustomTemplate(text: string, template: CustomTemplate): Transaction[] {
   const records: Transaction[] = []
@@ -317,6 +416,8 @@ function extractWithCustomTemplate(text: string, template: CustomTemplate): Tran
   return records
 }
 
+// --- 3. Telegram Extraction ---
+
 function extractTelegramTransactions(text: string): Transaction[] {
   const records: Transaction[] = []
 
@@ -356,6 +457,8 @@ function extractTelegramTransactions(text: string): Transaction[] {
 
   return records
 }
+
+// --- 4. PDF Extraction ---
 
 function extractPdfTransactions(buffer: ArrayBuffer, fileName: string): Transaction[] {
   const records: Transaction[] = []
@@ -407,6 +510,8 @@ function extractPdfTransactions(buffer: ArrayBuffer, fileName: string): Transact
 
   return records
 }
+
+// --- 5. Email Extraction ---
 
 function extractEmailTransactions(text: string): Transaction[] {
   const records: Transaction[] = []
@@ -497,8 +602,7 @@ function extractEmailTransactions(text: string): Transaction[] {
   return records
 }
 
-
-// --- 3. Shared Helpers ---
+// --- 6. Shared Helpers ---
 
 function extractTelegramUser(text: string, date: string): string {
   const lines = text.split("\n")
@@ -551,7 +655,7 @@ function extractPaybillDestination(msg: string): { destination: string; account:
 }
 
 function detectTransactionType(text: string): string {
-  if (/bank|transfer|deposit|swift|wire/i.test(text)) return "Bank Transfer"
+  if (/bank|transfer|deposit|swift|wire|pesalink/i.test(text)) return "Bank Transfer"
   if (/M-PESA|MPESA|mpesa/i.test(text)) return "M-PESA"
   if (/worldremit|remitly|wise|xoom|money gram/i.test(text)) return "Remittance"
   if (/card|credit/i.test(text)) return "Card Transaction"
@@ -621,28 +725,54 @@ function extractEntities(msg: string, sender: string): [string, string] {
   return [paidBy, paidTo]
 }
 
+// UPDATED: Now handles 24-hour time format
 function formatDateTime(date: string, time: string): string {
   // Normalize informal time markers common in WhatsApp exports
-  // "1:22 in the afternoon" -> "1:22 PM"
   let cleanTime = time
     .replace("in the morning", "AM")
     .replace("in the afternoon", "PM")
     .replace("at night", "PM")
     .replace("in the evening", "PM")
-    .replace(/[\s-]/g, " ") // Remove trailing dashes or weird spaces
+    .replace(/[\s-]/g, " ")
     .trim()
   
-  // If no AM/PM is found, and it's just numbers, leave it (let the UI handle it or assume 24h)
-  // But if we have a clean standard format, we try to standardize the date separators
   try {
     const dateParts = date.split(/[\/-]/)
     if (dateParts.length === 3) {
-        const [d, m, y] = dateParts
-        // Return ISO-ish or standard format: YYYY-MM-DD HH:mm
-        return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")} ${cleanTime}`
+      let [d, m, y] = dateParts
+      
+      // Handle 2-digit years
+      if (y.length === 2) {
+        y = "20" + y
+      }
+      
+      // Return ISO-ish format: YYYY-MM-DD HH:mm
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")} ${cleanTime}`
     }
     return `${date} ${cleanTime}`
   } catch {
     return `${date} ${cleanTime}`
   }
+}
+
+// DEBUG HELPER: Detect WhatsApp format
+function detectWhatsAppFormat(text: string): string {
+  const lines = text.split("\n")
+  
+  // Find first non-empty line
+  const firstLine = lines.find(line => line.trim().length > 0) || ""
+  
+  if (/^\[/.test(firstLine)) {
+    return "Format 2: [DD/MM/YYYY, HH:MM:SS] Sender: (24-hour time with square brackets)"
+  }
+  
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4},\s*\d{1,2}:\d{2}.*?\s*-/.test(firstLine)) {
+    return "Format 1: DD/MM/YYYY, HH:MM AM/PM - Sender: (12-hour time with descriptive periods)"
+  }
+  
+  if (/^\d{1,2}\/\d{1,2}\/\d{2},\s*\d{1,2}:\d{2}\s*-/.test(firstLine)) {
+    return "Format 3: DD/MM/YY, HH:MM - Sender: (2-digit year)"
+  }
+  
+  return `Unknown format. First line: "${firstLine.substring(0, 100)}..."`
 }
