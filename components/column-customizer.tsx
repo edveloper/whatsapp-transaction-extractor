@@ -7,6 +7,7 @@ import { useState } from "react"
 
 interface ColumnCustomizerProps {
   columns: string[]
+  selectedColumns: string[] // Rename this from 'columns' if it was named that
   columnHeaders: Record<string, string>
   onColumnsChange: (columns: string[]) => void
   onHeadersChange: (headers: Record<string, string>) => void

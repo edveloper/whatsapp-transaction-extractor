@@ -50,6 +50,7 @@ export default function ExportOptions({ transactions, visibleColumns, columnHead
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const exportAsJSON = () => {
@@ -74,6 +75,7 @@ export default function ExportOptions({ transactions, visibleColumns, columnHead
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   return (
