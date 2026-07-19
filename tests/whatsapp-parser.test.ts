@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
+  dedupeTransactions,
   extractCode,
   extractRawTransactions,
   extractStrictAmount,
@@ -184,5 +185,80 @@ test("sanitizeWhatsAppField removes verbose time suffixes and direction marks", 
 
 test("manual ledger matches are flagged as low confidence", () => {
   const [transaction] = extractRawTransactions("29/04/2025, 7:39 in the morning - Mum KE: Buckets 8000")
+  assert.equal(isLowConfidence(transaction), true)
+})
+
+test("running-total continuation lines don't get merged into the previous message's amount", () => {
+  const text = [
+    "[11/10/2025, 13:20:41] Liz: Loan from fuel",
+    "=710,000+42,000+4,800=756,800",
+    "[11/10/2025, 13:25:00] Liz: KES 5,000 sent to John Doe via Pesalink",
+  ].join("\n")
+
+  const transactions = extractRawTransactions(text)
+  assert.ok(!transactions.some((t) => t.Amount === 710000), "the running-total formula must not be recorded as a transaction")
+})
+
+test("MANUAL_HINTS match whole words only, not substrings of unrelated words", () => {
+  assert.equal(extractRawTransactions("21/10/2025, 09:00 in the morning - Liz: Yeah, it fitted the market price well, but that's different").length, 0)
+  assert.equal(extractRawTransactions("21/10/2025, 09:00 in the morning - Liz: Let's grab coffee and catch up later").length, 0)
+})
+
+test("narrative and hypothetical phrasing is not recorded as a manual transaction", () => {
+  assert.equal(extractRawTransactions("21/10/2025, 09:00 in the morning - Liz: Would 200k be too much in current state?").length, 0)
+  assert.equal(extractRawTransactions("21/10/2025, 09:00 in the morning - Liz: Okay, keep me posted cuz he paid back the 304k").length, 0)
+  assert.equal(extractRawTransactions("21/10/2025, 09:00 in the morning - Liz: Hey pal, can you check if you made a deposit of 800k").length, 0)
+})
+
+test("multi-item cost breakdowns use the author's stated total, not the first line item", () => {
+  const [transaction] = extractRawTransactions(
+    "21/10/2025, 09:00 in the morning - Liz: September site - Labour 170,000 + Material 840,000 = 1,010,000",
+  )
+  assert.equal(transaction.Amount, 1010000)
+})
+
+test("extractCounterpartyDetails doesn't split a bare 'Account' into a fake account number", () => {
+  const [transaction] = extractRawTransactions(
+    "21/10/2025, 09:00 in the morning - Dad KE: Dear JOHN DOE, Your transaction of KES. 150,000.00 has successfully been deposited to Equity Account in favor of ACME SUPPLIES LTD... Ref. Number SB012345XY on 21-10-2025 at 09:00. Thank you.",
+  )
+  assert.notEqual(transaction.CounterpartyId, "ount")
+})
+
+test("extractCode finds a labeled reference even without a colon", () => {
+  assert.equal(extractCode("Ref  SFQ8NXETMM. Thank you."), "SFQ8NXETMM")
+})
+
+test("dedupeTransactions collapses only same reference+amount, not coincidental same-day/same-amount transactions", () => {
+  const base = { Date: "15/05/2024 08:21", "Paid By": "Dad KE", "Paid To": "ACME LTD", CounterpartyId: "78777", Purpose: "payment" }
+  const sameTxReportedTwice = [
+    { ...base, Amount: 102000, Type: "M-PESA", Reference: "SEF6CUF464" },
+    { ...base, Amount: 102000, Type: "M-PESA", Reference: "SEF6CUF464" },
+  ]
+  assert.equal(dedupeTransactions(sameTxReportedTwice).length, 1)
+
+  const distinctSameDayAndAmount = [
+    { ...base, Date: "09/04/2024 11:12", Amount: 150000, Type: "Bank Deposit", Reference: "SD99M7GRWZ" },
+    { ...base, Date: "09/04/2024 12:53", Amount: 150000, Type: "Bank Deposit", Reference: "SD95M92X3L" },
+  ]
+  assert.equal(dedupeTransactions(distinctSameDayAndAmount).length, 2)
+})
+
+test("extracts KRA E-Slip tax payment confirmations", () => {
+  const text =
+    "09/09/2024, 11:13 in the morning - Ann M: Dear Kenya Revenue Authority, we confirm your Payment Ref: LPRBVPGY for E-Slip No. 2020240003070626 of KES 5250.00 has been received on 2024-9-9 11:11:58 AM by KRA."
+  const [transaction] = extractRawTransactions(text)
+
+  assert.equal(transaction.Type, "Tax Payment")
+  assert.equal(transaction.Amount, 5250)
+  assert.equal(transaction.Reference, "LPRBVPGY")
+  assert.equal(transaction["Paid To"], "Kenya Revenue Authority")
+  assert.equal(transaction.sourcePattern, "kra_eslip")
+})
+
+test("remittance messages stating an unconverted foreign-currency amount are flagged low-confidence, not silently read as KES", () => {
+  const text = "21/10/2025, 09:00 in the morning - Liz: TX123ABCDE confirmed. You sent USD 500 to John Doe via Wise on 21/10/25."
+  const [transaction] = extractRawTransactions(text)
+
+  assert.match(transaction.Type, /verify currency/)
   assert.equal(isLowConfidence(transaction), true)
 })

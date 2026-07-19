@@ -4,40 +4,50 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated color palette for modern finance app - emerald green primary, deep slate neutrals, clean whites */
-  --background: oklch(0.98 0.001 100);
-  --foreground: oklch(0.16 0.02 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.02 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.02 240);
-  --primary: oklch(0.52 0.15 155);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.94 0.02 240);
-  --secondary-foreground: oklch(0.16 0.02 240);
-  --muted: oklch(0.92 0.01 240);
-  --muted-foreground: oklch(0.48 0.02 240);
-  --accent: oklch(0.58 0.12 45);
-  --accent-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.63 0.26 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.9 0.02 240);
-  --input: oklch(0.98 0.001 100);
-  --ring: oklch(0.52 0.15 155);
-  --chart-1: oklch(0.52 0.15 155);
-  --chart-2: oklch(0.58 0.12 45);
-  --chart-3: oklch(0.65 0.1 200);
-  --chart-4: oklch(0.7 0.08 260);
-  --chart-5: oklch(0.55 0.14 120);
+  /* Daftari palette: warm ledger paper, deep green ink for money, brass for flagged items. */
+  --background: #f5efdd;
+  --foreground: #1e2a22;
+  --card: #fefcf5;
+  --card-foreground: #1e2a22;
+  --popover: #fefcf5;
+  --popover-foreground: #1e2a22;
+  --primary: #1f7a4d;
+  --primary-foreground: #f5efdd;
+  --secondary: #e8dfc5;
+  --secondary-foreground: #1e2a22;
+  --muted: #ede6d2;
+  --muted-foreground: #6e6a56;
+  --accent: #a9812e;
+  --accent-foreground: #f5efdd;
+  --destructive: #b3401f;
+  --destructive-foreground: #f5efdd;
+  --border: #d9cfa9;
+  --input: #fbf8ef;
+  --ring: #1f7a4d;
+  --chart-1: #1f7a4d;
+  --chart-2: #a9812e;
+  --chart-3: #4a6fa5;
+  --chart-4: #6b8e7a;
+  --chart-5: #b3401f;
   --radius: 0.625rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.16 0.02 240);
-  --sidebar-primary: oklch(0.52 0.15 155);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.02 240);
-  --sidebar-accent-foreground: oklch(0.16 0.02 240);
-  --sidebar-border: oklch(0.9 0.02 240);
-  --sidebar-ring: oklch(0.52 0.15 155);
+  --sidebar: #fefcf5;
+  --sidebar-foreground: #1e2a22;
+  --sidebar-primary: #1f7a4d;
+  --sidebar-primary-foreground: #f5efdd;
+  --sidebar-accent: #e8dfc5;
+  --sidebar-accent-foreground: #1e2a22;
+  --sidebar-border: #d9cfa9;
+  --sidebar-ring: #1f7a4d;
+
+  /* Pop palette: bold, flat, saturated accents used deliberately in blocks (badges, chart
+     segments, card variety) -- not tints of the primary green. Pink and purple are lightened
+     from their initial values specifically so foreground text sitting on them clears WCAG AA
+     (4.5:1) at small sizes -- verified by computing actual contrast ratios, not eyeballed. */
+  --pop-pink: #eb6fa4;
+  --pop-teal: #2bb3a3;
+  --pop-orange: #e8823c;
+  --pop-purple: #a787d3;
+  --pop-yellow: #e8b23d;
 }
 
 .dark {
@@ -78,6 +88,12 @@
 @theme inline {
   --font-sans: "Geist", "Geist Fallback";
   --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --font-display: var(--font-fredoka), "Geist", sans-serif;
+  --color-pop-pink: var(--pop-pink);
+  --color-pop-teal: var(--pop-teal);
+  --color-pop-orange: var(--pop-orange);
+  --color-pop-purple: var(--pop-purple);
+  --color-pop-yellow: var(--pop-yellow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -122,5 +138,19 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* The "cut sticker" treatment: a thick ink border plus a hard, unblurred offset shadow. This
+     is what reads as designed rather than default -- not the corner radius, which stays fairly
+     conventional. Two weights: card-bold for content containers, badge-bold for small pills. */
+  .card-bold {
+    @apply rounded-xl border-2 border-foreground bg-card;
+    box-shadow: 5px 5px 0 0 var(--foreground);
+  }
+  .badge-bold {
+    @apply rounded-full border-2 border-foreground;
+    box-shadow: 2.5px 2.5px 0 0 var(--foreground);
   }
 }

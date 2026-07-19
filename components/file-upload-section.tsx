@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useCallback, useRef, useState } from "react"
-import { AlertCircle, FileText, Upload } from "lucide-react"
+import { AlertCircle, ArrowDown, FileText, Upload } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -63,8 +63,11 @@ export default function FileUploadSection({ onFileUpload, isLoading }: FileUploa
     <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-8">
       <div className="order-2 space-y-6 lg:order-1">
         <div>
-          <h2 className="mb-3 text-2xl font-bold text-foreground text-balance md:text-3xl">
-            Extract Transactions From WhatsApp Chats
+          <h2 className="mb-3 text-balance font-display text-3xl font-bold leading-[1.1] text-foreground md:text-4xl">
+            Extract transactions from{" "}
+            <span className="inline-block -rotate-1 rounded-lg border-2 border-foreground bg-pop-teal px-2 py-0.5 text-foreground">
+              WhatsApp chats
+            </span>
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground md:text-lg">
             Upload your WhatsApp chat export and extract transaction details into a clean CSV. This version is focused
@@ -72,36 +75,39 @@ export default function FileUploadSection({ onFileUpload, isLoading }: FileUploa
           </p>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-sm font-bold text-primary">1</span>
+        <div>
+          <span className="badge-bold mb-3 inline-block bg-pop-yellow px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
+            What Happens to a Message
+          </span>
+          <Card className="card-bold p-4">
+            <div className="rounded-lg rounded-bl-sm border-2 border-foreground bg-pop-teal/25 p-3 text-sm">
+              <p className="mb-1 text-[10px] font-bold text-foreground">Auntie Jane · 18/08, 10:20am</p>
+              <p className="text-foreground">
+                TX7F9K2M1P Confirmed. 5,000.00 KSH sent to John Mwangi, 0722***456 via M-PESA App.
+              </p>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground md:text-base">Export Chat</h3>
-              <p className="text-xs text-muted-foreground md:text-sm">Use a WhatsApp chat export without media</p>
+            <div className="flex justify-center py-1 text-primary">
+              <ArrowDown className="h-5 w-5" strokeWidth={3} />
             </div>
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-sm font-bold text-primary">2</span>
+            <div className="space-y-1.5 rounded-lg border-2 border-foreground bg-card p-3 text-xs">
+              <div className="flex justify-between border-b border-dashed border-border pb-1.5">
+                <span className="font-bold text-foreground">Amount</span>
+                <span className="font-mono text-foreground">Ksh 5,000</span>
+              </div>
+              <div className="flex justify-between border-b border-dashed border-border pb-1.5">
+                <span className="font-bold text-foreground">Paid to</span>
+                <span className="text-foreground">John Mwangi</span>
+              </div>
+              <div className="flex justify-between border-b border-dashed border-border pb-1.5">
+                <span className="font-bold text-foreground">Reference</span>
+                <span className="font-mono text-foreground">TX7F9K2M1P</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold text-foreground">Type</span>
+                <span className="text-foreground">M-PESA</span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground md:text-base">Upload .txt File</h3>
-              <p className="text-xs text-muted-foreground md:text-sm">Drag and drop or select the exported chat file</p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <span className="text-sm font-bold text-primary">3</span>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground md:text-base">Download CSV</h3>
-              <p className="text-xs text-muted-foreground md:text-sm">Review the table, then export your results</p>
-            </div>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -115,18 +121,18 @@ export default function FileUploadSection({ onFileUpload, isLoading }: FileUploa
 
         <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} className="h-full">
           <Card
-            className={`flex cursor-pointer flex-col items-center justify-center gap-4 border-2 border-dashed bg-card/30 p-6 backdrop-blur-sm transition-colors md:p-8 lg:p-12 ${
-              isDragging ? "border-primary/80 bg-primary/5" : "border-border/50 hover:border-primary/50 hover:bg-card/50"
+            className={`card-bold flex cursor-pointer flex-col items-center justify-center gap-4 border-dashed p-6 transition-colors md:p-8 lg:p-12 ${
+              isDragging ? "bg-primary/10" : "hover:bg-primary/5"
             }`}
           >
             <input ref={inputRef} type="file" accept={acceptedFormats} onChange={handleFileSelect} className="hidden" />
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 md:h-16 md:w-16">
-              <Upload className="h-6 w-6 text-primary md:h-8 md:w-8" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-foreground bg-pop-orange md:h-20 md:w-20">
+              <Upload className="h-7 w-7 text-foreground md:h-9 md:w-9" strokeWidth={2.5} />
             </div>
 
             <div className="space-y-2 text-center">
-              <h3 className="text-lg font-bold text-foreground md:text-xl">Drag and drop your file</h3>
+              <h3 className="font-display text-xl font-bold text-foreground md:text-2xl">Drag and drop your file</h3>
               <p className="text-xs text-muted-foreground md:text-sm">
                 or click to select a WhatsApp export ({acceptedFormats})
               </p>
@@ -135,7 +141,7 @@ export default function FileUploadSection({ onFileUpload, isLoading }: FileUploa
             <Button
               onClick={() => inputRef.current?.click()}
               disabled={isLoading}
-              className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90 md:w-auto"
+              className="badge-bold mt-4 w-full rounded-full bg-primary px-6 font-bold text-primary-foreground hover:bg-primary/90 md:w-auto"
               size="lg"
             >
               {isLoading ? "Processing..." : "Select File"}

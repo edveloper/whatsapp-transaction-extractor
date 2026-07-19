@@ -40,7 +40,7 @@ export default function AdvancedFilters({ transactions, onFiltersChange }: Advan
   const hasActiveFilters = searchTerm || selectedCategory || selectedMerchant || reviewOnly
 
   return (
-    <div className="space-y-4 bg-card/50 p-6 rounded-xl border border-border/50 backdrop-blur-sm">
+    <div className="card-bold space-y-4 bg-card p-6 text-card-foreground">
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -48,14 +48,14 @@ export default function AdvancedFilters({ transactions, onFiltersChange }: Advan
             placeholder="Search merchants, references, or notes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-background/50"
+            className="rounded-full border-2 border-foreground bg-background pl-10"
           />
         </div>
         {hasActiveFilters && (
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => { setSearchTerm(""); setSelectedCategory(null); setSelectedMerchant(null); setReviewOnly(false); }}
-            className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+            className="text-xs font-bold text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
           >
             <FilterX className="w-4 h-4 mr-2" /> Reset Filters
           </Button>
@@ -72,8 +72,8 @@ export default function AdvancedFilters({ transactions, onFiltersChange }: Advan
             {categories.map((cat) => (
               <Badge
                 key={cat}
-                variant={selectedCategory === cat ? "default" : "outline"}
-                className="cursor-pointer capitalize transition-all hover:scale-105"
+                variant="outline"
+                className={`cursor-pointer rounded-full border-2 border-foreground capitalize transition-all hover:scale-105 ${selectedCategory === cat ? "bg-pop-teal text-foreground" : "bg-card"}`}
                 onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
               >
                 {cat}
@@ -91,8 +91,8 @@ export default function AdvancedFilters({ transactions, onFiltersChange }: Advan
             {merchantTypes.map((type) => (
               <Badge
                 key={type}
-                variant={selectedMerchant === type ? "secondary" : "outline"}
-                className={`cursor-pointer capitalize transition-all hover:scale-105 ${selectedMerchant === type ? 'bg-orange-500/20 text-orange-600 border-orange-500/30' : ''}`}
+                variant="outline"
+                className={`cursor-pointer rounded-full border-2 border-foreground capitalize transition-all hover:scale-105 ${selectedMerchant === type ? "bg-pop-orange text-foreground" : "bg-card"}`}
                 onClick={() => setSelectedMerchant(selectedMerchant === type ? null : type)}
               >
                 {type}
@@ -106,8 +106,8 @@ export default function AdvancedFilters({ transactions, onFiltersChange }: Advan
             Review
           </span>
           <Badge
-            variant={reviewOnly ? "default" : "outline"}
-            className="cursor-pointer transition-all hover:scale-105"
+            variant="outline"
+            className={`cursor-pointer rounded-full border-2 border-foreground transition-all hover:scale-105 ${reviewOnly ? "bg-pop-yellow text-foreground" : "bg-card"}`}
             onClick={() => setReviewOnly((current) => !current)}
           >
             Low Confidence Only

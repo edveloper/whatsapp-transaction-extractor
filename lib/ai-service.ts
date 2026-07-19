@@ -4,7 +4,10 @@ import { z } from 'zod';
 
 export async function enrichTransactionWithAI(content: string) {
   const { object } = await generateObject({
-    model: google('gemini-1.5-flash'),
+    // "-latest" alias instead of a pinned version: Google has retired multiple dated Gemini
+    // model names within months of each other (1.5-flash, then 2.5-flash), silently breaking
+    // this call every time. The alias tracks whatever the current recommended flash model is.
+    model: google('gemini-flash-latest'),
     schema: z.object({
       category: z.enum(['Groceries', 'Utilities', 'Transport', 'Rent', 'Business', 'Agribusiness', 'Construction & Labour', 'Personal Transfer', 'Other']),
       recipient: z.string(),

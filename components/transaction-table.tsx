@@ -1,11 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { AlertTriangle, ChevronDown, ChevronUp, Tag, Store } from "lucide-react"
-import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { isLowConfidence } from "@/lib/whatsapp-parser"
-
 
 // This interface now matches your API and Home page perfectly
 export interface Transaction {
@@ -26,6 +25,7 @@ export interface Transaction {
   MerchantType?: string
   confidence?: number
   sourcePattern?: string
+  rawContent?: string
 }
 
 interface TransactionTableProps {
@@ -34,8 +34,16 @@ interface TransactionTableProps {
   columnHeaders: Record<string, string>
 }
 
+// Below this, the plain 70vh-capped table already renders every row fine -- virtualizing a
+// 40-row table just adds overhead (measuring, spacer rows) with no visible benefit. Above it,
+// a WhatsApp export with hundreds of manual entries would otherwise mean hundreds of live DOM
+// rows on the page at once.
+const VIRTUALIZE_THRESHOLD = 60
+const ESTIMATED_ROW_HEIGHT = 45
+
 export default function TransactionTable({ transactions, columns, columnHeaders }: TransactionTableProps) {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const sortedTransactions = useMemo(() => {
     const sorted = [...transactions]
@@ -52,6 +60,15 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
     return sorted
   }, [transactions, sortConfig])
 
+  const shouldVirtualize = sortedTransactions.length > VIRTUALIZE_THRESHOLD
+
+  const virtualizer = useVirtualizer({
+    count: sortedTransactions.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    overscan: 12,
+  })
+
   const handleSort = (key: string) => {
     setSortConfig((current) => {
       if (current?.key === key) {
@@ -67,7 +84,7 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
 
     if (col === "Category") {
       return (
-        <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 gap-1 capitalize">
+        <Badge variant="secondary" className="gap-1 rounded-full border border-foreground bg-pop-teal/30 capitalize text-foreground">
           <Tag className="w-3 h-3" />
           {value}
         </Badge>
@@ -76,7 +93,7 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
 
     if (col === "MerchantType") {
       return (
-        <Badge variant="outline" className="gap-1 capitalize text-muted-foreground">
+        <Badge variant="outline" className="gap-1 rounded-full border border-foreground capitalize text-muted-foreground">
           <Store className="w-3 h-3" />
           {value}
         </Badge>
@@ -90,7 +107,10 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
     if (col === "confidence") {
       const confidenceValue = Number(value)
       return (
-        <Badge variant={confidenceValue < 0.75 ? "destructive" : "outline"} className="gap-1">
+        <Badge
+          variant={confidenceValue < 0.75 ? "destructive" : "outline"}
+          className={`gap-1 rounded-full border border-foreground ${confidenceValue < 0.75 ? "bg-pop-orange text-foreground" : ""}`}
+        >
           {confidenceValue < 0.75 && <AlertTriangle className="w-3 h-3" />}
           {Math.round(confidenceValue * 100)}%
         </Badge>
@@ -100,25 +120,47 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
     return String(value)
   }
 
+  const renderRow = (transaction: Transaction, idx: number) => (
+    <tr
+      key={idx}
+      className={`border-b border-border hover:bg-muted/30 transition-colors ${
+        isLowConfidence(transaction) ? "bg-pop-orange/10" : ""
+      }`}
+      style={{ height: ESTIMATED_ROW_HEIGHT }}
+    >
+      {columns.map((col) => (
+        <td key={`${idx}-${col}`} className="px-4 py-3">
+          <div className="max-w-[200px] lg:max-w-[300px] truncate" title={String(transaction[col])}>
+            {renderCellContent(col, transaction[col])}
+          </div>
+        </td>
+      ))}
+    </tr>
+  )
+
   if (transactions.length === 0) {
     return (
-      <Card className="p-6 md:p-8 text-center">
+      <div className="card-bold bg-card p-6 text-center text-card-foreground md:p-8">
         <p className="text-sm md:text-base text-muted-foreground">No transactions found.</p>
-      </Card>
+      </div>
     )
   }
 
+  const virtualRows = shouldVirtualize ? virtualizer.getVirtualItems() : []
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom = virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
+
   return (
-    <Card className="overflow-hidden border-border/50">
-      <div className="overflow-x-auto">
+    <div className="card-bold overflow-hidden bg-card text-card-foreground">
+      <div ref={scrollRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: shouldVirtualize ? "70vh" : undefined }}>
         <table className="w-full text-xs md:text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b-2 border-foreground bg-pop-yellow/40">
               {columns.map((col) => (
                 <th
                   key={col}
                   onClick={() => handleSort(col)}
-                  className="px-4 py-3 text-left font-semibold text-foreground cursor-pointer hover:bg-muted transition-colors whitespace-nowrap"
+                  className="px-4 py-3 text-left font-bold text-foreground cursor-pointer hover:bg-pop-yellow/60 transition-colors whitespace-nowrap"
                 >
                   <div className="flex items-center gap-2">
                     <span>{columnHeaders[col] || col}</span>
@@ -133,25 +175,26 @@ export default function TransactionTable({ transactions, columns, columnHeaders 
             </tr>
           </thead>
           <tbody>
-            {sortedTransactions.map((transaction, idx) => (
-              <tr
-                key={idx}
-                className={`border-b border-border/40 hover:bg-muted/30 transition-colors ${
-                  isLowConfidence(transaction) ? "bg-amber-500/5" : ""
-                }`}
-              >
-                {columns.map((col) => (
-                  <td key={`${idx}-${col}`} className="px-4 py-3">
-                    <div className="max-w-[200px] lg:max-w-[300px] truncate" title={String(transaction[col])}>
-                      {renderCellContent(col, transaction[col])}
-                    </div>
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {shouldVirtualize ? (
+              <>
+                {paddingTop > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={columns.length} style={{ height: paddingTop, padding: 0, border: 0 }} />
+                  </tr>
+                )}
+                {virtualRows.map((virtualRow) => renderRow(sortedTransactions[virtualRow.index], virtualRow.index))}
+                {paddingBottom > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+                  </tr>
+                )}
+              </>
+            ) : (
+              sortedTransactions.map((transaction, idx) => renderRow(transaction, idx))
+            )}
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   )
 }

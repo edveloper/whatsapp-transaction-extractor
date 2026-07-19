@@ -11,6 +11,7 @@
   },
   "include": [
     "lib/whatsapp-parser.ts",
+    "lib/rate-limit.ts",
     "tests/**/*.ts"
   ]
 }

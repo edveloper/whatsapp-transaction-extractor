@@ -15,15 +15,15 @@ export default function HelpModal() {
         onClick={() => setOpen(true)}
         variant="ghost"
         size="sm"
-        className="fixed bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary p-0 text-primary-foreground shadow-lg hover:bg-primary/90"
+        className="badge-bold fixed bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-pop-yellow p-0 text-foreground hover:bg-pop-yellow/90"
       >
-        <HelpCircle className="h-5 w-5" />
+        <HelpCircle className="h-5 w-5" strokeWidth={2.5} />
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto rounded-2xl border-2 border-foreground">
           <DialogHeader>
-            <DialogTitle>How to Use TransactionExtract</DialogTitle>
+            <DialogTitle className="font-display text-xl">How to Use daftari</DialogTitle>
           </DialogHeader>
 
           <Tabs defaultValue="export" className="w-full">
@@ -43,8 +43,8 @@ export default function HelpModal() {
                   <ol className="list-inside list-decimal space-y-2 text-sm text-muted-foreground">
                     <li>Open the WhatsApp group or chat with transactions</li>
                     <li>Tap the three dots menu at the top right</li>
-                    <li>Select "More" then "Export chat"</li>
-                    <li>Choose "Without media" for a `.txt` file</li>
+                    <li>Select &quot;More&quot; then &quot;Export chat&quot;</li>
+                    <li>Choose &quot;Without media&quot; for a `.txt` file</li>
                     <li>Save the export to your device</li>
                   </ol>
                 </div>
@@ -57,15 +57,15 @@ export default function HelpModal() {
                   <ol className="list-inside list-decimal space-y-2 text-sm text-muted-foreground">
                     <li>Open the WhatsApp group or chat</li>
                     <li>Tap the chat name at the top</li>
-                    <li>Scroll down and select "Export Chat"</li>
-                    <li>Choose the "Without Media" option</li>
+                    <li>Scroll down and select &quot;Export Chat&quot;</li>
+                    <li>Choose the &quot;Without Media&quot; option</li>
                     <li>Save the file to Files so you can upload the `.txt` export</li>
                   </ol>
                 </div>
 
-                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
-                  <p className="mb-1 font-semibold text-amber-900">Pro Tip:</p>
-                  <p className="text-amber-800">
+                <div className="rounded-lg border-2 border-foreground bg-pop-yellow/25 p-3 text-sm">
+                  <p className="mb-1 font-bold text-foreground">Pro Tip:</p>
+                  <p className="text-foreground">
                     Include enough chat history to capture the transactions you care about, but expect slower processing
                     on very large exports.
                   </p>
@@ -93,7 +93,7 @@ export default function HelpModal() {
                 <div>
                   <h3 className="mb-2 font-semibold">Step 3: Customize Columns</h3>
                   <p className="mb-2 text-sm text-muted-foreground">
-                    Click "Customize Columns" to show or hide fields and rename headers to match your workflow.
+                    Click &quot;Customize Columns&quot; to show or hide fields and rename headers to match your workflow.
                   </p>
                 </div>
 
@@ -104,9 +104,9 @@ export default function HelpModal() {
                   </p>
                 </div>
 
-                <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm">
-                  <p className="mb-1 font-semibold text-blue-900">Supported Patterns:</p>
-                  <ul className="list-inside list-disc space-y-1 text-blue-800">
+                <div className="rounded-lg border-2 border-foreground bg-pop-teal/20 p-3 text-sm">
+                  <p className="mb-1 font-bold text-foreground">Supported Patterns:</p>
+                  <ul className="list-inside list-disc space-y-1 text-foreground">
                     <li>M-PESA transfers and confirmations</li>
                     <li>Manual payment logs shared in chat</li>
                     <li>Common amount and reference patterns found in WhatsApp exports</li>
@@ -166,9 +166,9 @@ export default function HelpModal() {
                   </div>
                 </div>
 
-                <div className="rounded border border-green-200 bg-green-50 p-3 text-sm">
-                  <p className="mb-1 font-semibold text-green-900">Best Practice:</p>
-                  <p className="text-green-800">
+                <div className="rounded-lg border-2 border-foreground bg-primary/15 p-3 text-sm">
+                  <p className="mb-1 font-bold text-foreground">Best Practice:</p>
+                  <p className="text-foreground">
                     Export the chat on your phone, upload the `.txt` file here, then import the CSV into Google
                     Sheets or Excel.
                   </p>
