@@ -1,3 +1,6 @@
+// See lib/indexing.ts. Read directly here because next.config can't import TS.
+const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -17,6 +20,8 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // No reason for this app to use the camera/mic/geolocation APIs.
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // Hidden from search until the site has its own domain; see lib/indexing.ts.
+          ...(allowIndexing ? [] : [{ key: "X-Robots-Tag", value: "noindex, nofollow" }]),
         ],
       },
     ]

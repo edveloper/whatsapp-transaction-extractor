@@ -1,0 +1,21 @@
+# daftari
+
+> daftari turns an exported WhatsApp chat into a clean ledger. It reads the M-PESA confirmations, bank alerts and other payment messages buried in the chat and lists every transaction, dated and categorised, ready to filter and export.
+
+daftari is a free web app made by Eddie Ezekiel Ochieng in Kenya.
+
+## How it works
+
+- Upload a WhatsApp chat export.
+- Payment messages are read by rules, not guesswork: M-PESA (Paybill, Buy Goods and transfers), Airtel Money, bank alerts, remittances, KRA payments and foreign currencies.
+- AI is used only to suggest a category for the few transactions the rules cannot place.
+- Every transaction carries a confidence score; anything uncertain goes to a Review Queue for the user to confirm.
+- Export the ledger to CSV, JSON or Excel.
+
+## Privacy
+
+The chat is parsed in memory and discarded. Nothing is written to a database or disk.
+
+## Pages
+
+- [daftari](/): the extractor.
